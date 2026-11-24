@@ -22,16 +22,32 @@ MAX_CHARS = 180
 def _validate_entry(text):
     """Gate: 1-180 chars, single line, valid UTF-8, not only whitespace."""
     if not isinstance(text, str):
+        print("entry rejected: not a string", file=sys.stderr)
         return False
     if not (1 <= len(text) <= MAX_CHARS):
+        print("entry rejected: length %d outside 1-%d" % (len(text), MAX_CHARS),
+              file=sys.stderr)
         return False
-    if text != text.strip() or not text.strip():
+    # Explicit CR rejection: a carriage return would break the one-line
+    # contract on Windows-style line endings.
+    if "\r" in text:
+        print("entry rejected: contains CR character", file=sys.stderr)
         return False
-    if "\r" in text or "\n" in text:
+    if "\n" in text:
+        print("entry rejected: contains newline", file=sys.stderr)
+        return False
+    # Explicit whitespace-only rejection: an entry of only spaces/tabs
+    # is not a real excuse.
+    if not text.strip():
+        print("entry rejected: only whitespace", file=sys.stderr)
+        return False
+    if text != text.strip():
+        print("entry rejected: leading/trailing whitespace", file=sys.stderr)
         return False
     try:
         text.encode("utf-8")
     except UnicodeEncodeError:
+        print("entry rejected: not valid UTF-8", file=sys.stderr)
         return False
     return True
 
@@ -51,11 +67,19 @@ def main():
 
     try:
         os.makedirs(out_dir_abs, exist_ok=True)
-        with open(os.path.join(out_dir_abs, "entry.txt"), "w",
-                  encoding="utf-8", newline="\n") as f:
+        entry_path = os.path.join(out_dir_abs, "entry.txt")
+        with open(entry_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(ENTRY)
     except OSError:
         return 0
+    # Read-back check: what landed on disk must be exactly ENTRY.
+    try:
+        with open(entry_path, "r", encoding="utf-8") as f:
+            if f.read() != ENTRY:
+                print("entry mismatch: entry.txt does not match ENTRY_TEXT",
+                      file=sys.stderr)
+    except OSError:
+        print("entry read-back failed", file=sys.stderr)
     return 0
 
 
